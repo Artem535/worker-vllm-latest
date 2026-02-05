@@ -10,11 +10,10 @@ RUN ldconfig /usr/local/cuda-12.4/compat/
 # Install Python dependencies
 COPY builder/requirements.txt /requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --upgrade pip && \
-    python3 -m pip install --upgrade -r /requirements.txt
+    uv pip install --system -r /requirements.txt
 
 # Install vLLM
-RUN uv pip install vllm
+RUN uv pip install --system vllm
 
 # Setup for Option 2: Building the Image with the Model included
 ARG MODEL_NAME=""
