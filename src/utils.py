@@ -6,25 +6,46 @@ from time import time
 
 try:
     from vllm.utils import random_uuid
-    from vllm.entrypoints.openai.protocol import ErrorResponse
     from vllm import SamplingParams
-except ImportError:
-    logging.warning("Error importing vllm, skipping related imports. This is ONLY expected when baking model into docker image from a machine without GPUs")
-    pass
+    from vllm.entrypoints.openai.api_server import ErrorResponse
+except ImportError as e:
+    logging.warning(
+        f"Error importing vllm: {e}. "
+        f"Skipping related imports. "
+        f"This is ONLY expected when baking model into docker image from a machine without GPUs"
+    )
+
+    def random_uuid():
+        import uuid
+
+        return str(uuid.uuid4())
+
+    class SamplingParams:
+        def __init__(self, **kwargs):
+            self.max_tokens = kwargs.get("max_tokens", 100)
+
+    class ErrorResponse:
+        def __init__(self, message, type, code):
+            self.message = message
+            self.type = type
+            self.code = code
+
 
 logging.basicConfig(level=logging.INFO)
+
 
 # Updated to parse multiple comma-separated multimodal limits (e.g., 'image=1,video=0')
 def convert_limit_mm_per_prompt(input_string: str):
     result = {}
-    pairs = input_string.split(',')
+    pairs = input_string.split(",")
     for pair in pairs:
-        key, value = pair.split('=')
+        key, value = pair.split("=")
         result[key] = int(value)
     return result
 
+
 def count_physical_cores():
-    with open('/proc/cpuinfo') as f:
+    with open("/proc/cpuinfo") as f:
         content = f.readlines()
 
     cores = set()
@@ -32,10 +53,10 @@ def count_physical_cores():
     current_core_id = None
 
     for line in content:
-        if 'physical id' in line:
-            current_physical_id = line.strip().split(': ')[1]
-        elif 'core id' in line:
-            current_core_id = line.strip().split(': ')[1]
+        if "physical id" in line:
+            current_physical_id = line.strip().split(": ")[1]
+        elif "core id" in line:
+            current_core_id = line.strip().split(": ")[1]
             cores.add((current_physical_id, current_core_id))
 
     return len(cores)
@@ -54,24 +75,25 @@ class JobInput:
         self.sampling_params = SamplingParams(**samp_param)
         self.request_id = random_uuid()
         batch_size_growth_factor = job.get("batch_size_growth_factor")
-        self.batch_size_growth_factor = float(batch_size_growth_factor) if batch_size_growth_factor else None 
+        self.batch_size_growth_factor = (
+            float(batch_size_growth_factor) if batch_size_growth_factor else None
+        )
         min_batch_size = job.get("min_batch_size")
-        self.min_batch_size = int(min_batch_size) if min_batch_size else None 
+        self.min_batch_size = int(min_batch_size) if min_batch_size else None
         self.openai_route = job.get("openai_route")
         self.openai_input = job.get("openai_input")
 
 
 class DummyState:
     def __init__(self):
-        # In vLLM 0.15.x RequestResponseMetadata was removed
         self.request_metadata = None
-        
+
 
 class DummyRequest:
     def __init__(self):
         self.headers = {}
         self.state = DummyState()
-    
+
     async def is_disconnected(self):
         return False
 
@@ -81,22 +103,29 @@ class BatchSize:
         self.max_batch_size = max_batch_size
         self.batch_size_growth_factor = batch_size_growth_factor
         self.min_batch_size = min_batch_size
-        self.is_dynamic = batch_size_growth_factor > 1 and min_batch_size >= 1 and max_batch_size > min_batch_size
+        self.is_dynamic = (
+            batch_size_growth_factor > 1 and 1 <= min_batch_size < max_batch_size
+        )
         if self.is_dynamic:
             self.current_batch_size = min_batch_size
         else:
             self.current_batch_size = max_batch_size
-        
+
     def update(self):
         if self.is_dynamic:
-            self.current_batch_size = min(self.current_batch_size*self.batch_size_growth_factor, self.max_batch_size)
-        
+            self.current_batch_size = min(
+                self.current_batch_size * self.batch_size_growth_factor,
+                self.max_batch_size,
+            )
 
-def create_error_response(message: str, err_type: str = "BadRequestError", status_code: HTTPStatus = HTTPStatus.BAD_REQUEST) -> ErrorResponse:
-    return ErrorResponse(message=message,
-                         type=err_type,
-                         code=status_code.value)
-    
+
+def create_error_response(
+    message: str,
+    err_type: str = "BadRequestError",
+    status_code: HTTPStatus = HTTPStatus.BAD_REQUEST,
+) -> ErrorResponse:
+    return ErrorResponse(message=message, type=err_type, code=status_code.value)
+
 
 def get_int_bool_env(env_var: str, default: bool) -> bool:
     return int(os.getenv(env_var, int(default))) == 1
@@ -110,4 +139,5 @@ def timer_decorator(func):
         end = time()
         logging.info(f"{func.__name__} completed in {end - start:.2f} seconds")
         return result
+
     return wrapper
