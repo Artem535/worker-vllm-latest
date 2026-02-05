@@ -4,7 +4,7 @@ RUN apt-get update -y \
     && apt-get install -y python3-pip curl
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="$HOME/.local/bin:$PATH"
+ENV PATH="/root/.local/bin:$PATH"
 
 RUN ldconfig /usr/local/cuda-12.4/compat/
 
