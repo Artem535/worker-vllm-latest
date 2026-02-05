@@ -1,9 +1,10 @@
-import os
+import glob
 import json
 import logging
-import glob
-from shutil import rmtree
+import os
+
 from huggingface_hub import snapshot_download
+
 from utils import timer_decorator
 
 BASE_DIR = "/" 

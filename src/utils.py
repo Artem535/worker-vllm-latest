@@ -7,7 +7,7 @@ from time import time
 try:
     from vllm.utils import random_uuid
     from vllm import SamplingParams
-    from vllm.entrypoints.openai.api_server import ErrorResponse
+    from vllm.entrypoints.openai.engine.protocol import ErrorResponse
 except ImportError as e:
     logging.warning(
         f"Error importing vllm: {e}. "
